@@ -1,0 +1,22 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Pycharm settings
+*.idea
+
+# Ruff cache
+*.ruff_cache
+
+# Files
+.env
+.env.docker
+.env.loc
+#config_services/pgbouncer/userlist.txt

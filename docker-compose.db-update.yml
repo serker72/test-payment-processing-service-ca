@@ -1,0 +1,54 @@
+services:
+  postgres:
+    image: postgres:17.5
+    container_name: payment-processing-ca-postgres
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_MULTIPLE_DATABASES: ${POSTGRES_DB}::${POSTGRES_USER}::${POSTGRES_PASSWORD}
+    volumes:
+      - ${POSTGRES_DATA_DIR:-/opt/payment-processing-data/db}:/var/lib/postgresql/data
+      - ${POSTGRES_BACKUPS_DIR:-/opt/payment-processing-data/backups}:/var/lib/postgresql/backups
+      - ./create-multiple-postgresql-databases.sh:/docker-entrypoint-initdb.d/create-multiple-postgresql-databases.sh
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+    restart: always
+
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.24.1-p1
+    container_name: payment-processing-ca-pgbouncer
+    ports:
+      - "${POSTGRES_PORT}:${POSTGRES_PORT}"
+    volumes:
+      - ./src/payment_processing_service/config/pgbouncer/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - ./src/payment_processing_service/config/pgbouncer/userlist.txt:/etc/pgbouncer/userlist.txt:ro
+    healthcheck:
+      test: [ 'CMD', 'pg_isready', '-h', 'localhost' ]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  wait-for-services:
+    image: atkrad/wait4x
+    container_name: payment-processing-ca-wait-for-services
+    command: tcp pgbouncer:${POSTGRES_PORT} --timeout 60s --interval 5s --backoff-policy exponential --backoff-exponential-coefficient 2.0 --backoff-exponential-max-interval 120s
+    restart: "no"
+    depends_on:
+      - pgbouncer
+
+  db-update:
+    image: payment-processing-backend-ca:latest
+    container_name: payment-processing-ca-db-update
+    env_file:
+      - ./.env
+    command: bash -c "alembic upgrade head"
+    restart: "no"
+    depends_on:
+      wait-for-services:
+        condition: service_completed_successfully

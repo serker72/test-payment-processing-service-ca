@@ -1,0 +1,18 @@
+services:
+  redis-insight:
+    image: redis/redisinsight:2.70
+    container_name: payment-processing-ca-redis-insight
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      RI_REDIS_HOST: ${REDIS_HOST:-redis}
+      RI_REDIS_PORT: ${REDIS_PORT:-6379}
+      RI_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis}
+    ports:
+      - "${RI_APP_PORT:-5540}:5540"
+    volumes:
+      - ${RI_REDIS_DATA_DIR}:/data
+    restart: always
+    depends_on:
+      wait-for-services:
+        condition: service_completed_successfully

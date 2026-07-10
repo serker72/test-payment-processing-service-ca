@@ -1,0 +1,103 @@
+{
+	"info": {
+		"_postman_id": "9612c574-5c6c-4fcd-b2c2-7aff87f37c8f",
+		"name": "local-test-tasks",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "10678116"
+	},
+	"item": [
+		{
+			"name": "payment-processing-service",
+			"item": [
+				{
+					"name": "/payments/{payment_id}",
+					"request": {
+						"auth": {
+							"type": "apikey",
+							"apikey": [
+								{
+									"key": "key",
+									"value": "x-api-key",
+									"type": "string"
+								},
+								{
+									"key": "value",
+									"value": "9c26c74b1b9bda81126eebd1e9f138073b2b029c877a29940724ed97984a1d92",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8000/api/v1/payments/b0e9e857-d043-43d8-8d17-3aa597fa70a5",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8000",
+							"path": [
+								"api",
+								"v1",
+								"payments",
+								"b0e9e857-d043-43d8-8d17-3aa597fa70a5"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "/payments/",
+					"request": {
+						"auth": {
+							"type": "apikey",
+							"apikey": [
+								{
+									"key": "key",
+									"value": "x-api-key",
+									"type": "string"
+								},
+								{
+									"key": "value",
+									"value": "9c26c74b1b9bda81126eebd1e9f138073b2b029c877a29940724ed97984a1d92",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Idempotency-Key",
+								"value": "{{$guid}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"amount\": 1003,\n  \"currency\": \"RUB\",\n  \"description\": \"Test #2026-06-21#3\",\n  \"meta_data\": {\n    \"address\": \"TRx0000000000000001\",\n    \"fio\": \"Testov Testovik\",\n    \"exp_date\": \"12/30\",\n    \"bank\": \"Test Bank\",\n    \"phone\": \"+79281000001\"\n  },\n  \"webhook_url\": \"https://test.example.com/webhooks/payments\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8000/api/v1/payments",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8000",
+							"path": [
+								"api",
+								"v1",
+								"payments"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}

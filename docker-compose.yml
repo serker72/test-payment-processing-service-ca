@@ -1,0 +1,134 @@
+services:
+  postgres:
+    image: postgres:17.5
+    container_name: payment-processing-ca-postgres
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_MULTIPLE_DATABASES: ${POSTGRES_DB}::${POSTGRES_USER}::${POSTGRES_PASSWORD}
+    volumes:
+      - ${POSTGRES_DATA_DIR:-/opt/payment-processing-data/db}:/var/lib/postgresql/data
+      - ${POSTGRES_BACKUPS_DIR:-/opt/payment-processing-data/backups}:/var/lib/postgresql/backups
+      - ./create-multiple-postgresql-databases.sh:/docker-entrypoint-initdb.d/create-multiple-postgresql-databases.sh
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+    restart: always
+
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.24.1-p1
+    container_name: payment-processing-ca-pgbouncer
+    ports:
+      - "${POSTGRES_PORT}:${POSTGRES_PORT}"
+    volumes:
+      - ./src/payment_processing_service/config/pgbouncer/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - ./src/payment_processing_service/config/pgbouncer/userlist.txt:/etc/pgbouncer/userlist.txt:ro
+    healthcheck:
+      test: [ 'CMD', 'pg_isready', '-h', 'localhost' ]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  redis:
+    image: redis:8.0.2-bookworm
+    container_name: payment-processing-ca-redis
+    ports:
+      - "0.0.0.0:${REDIS_PORT}:${REDIS_PORT}"
+    volumes:
+      - ${REDIS_DATA_DIR:-/opt/payment-processing-data/redis}:/data
+    command: /bin/sh -c "redis-server --requirepass '${REDIS_PASSWORD}'"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 30s
+      retries: 50
+      start_period: 30s
+    restart: always
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    container_name: payment-processing-ca-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-/}
+    ports:
+      - "0.0.0.0:${RABBITMQ_PORT}:${RABBITMQ_PORT}"
+      - "0.0.0.0:${RABBITMQ_MANAGEMENT_PORT}:${RABBITMQ_MANAGEMENT_PORT}"
+    volumes:
+      - ${RABBITMQ_DATA_DIR:-/opt/payment-processing-data/rabbitmq}:/var/lib/rabbitmq/
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      timeout: 30s
+      retries: 3
+    restart: always
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.76.0
+    container_name: payment-processing-ca-jaeger
+    ports:
+      - "16686:16686"  # Порт для Jaeger UI
+      - "14268:14268"  # Порт для приёма spans (можно оставить, если не используете хранилище)
+      - "4317:4317"   # OpenTelemetry gRPC
+      - "4318:4318"   # OpenTelemetry HTTP
+      - "9411:9411"  # Порт для совместимости с Zipkin
+    environment:
+      - COLLECTOR_ZIPKIN_HOST_PORT=:9411  # Включение совместимости
+    restart: unless-stopped
+
+  wait-for-services:
+    image: atkrad/wait4x
+    container_name: payment-processing-ca-wait-for-services
+    command: tcp redis:${REDIS_PORT} pgbouncer:${POSTGRES_PORT} rabbitmq:${RABBITMQ_MANAGEMENT_PORT} --timeout 60s --interval 5s --backoff-policy exponential --backoff-exponential-coefficient 2.0 --backoff-exponential-max-interval 120s
+    restart: "no"
+    depends_on:
+      - redis
+      - pgbouncer
+      - rabbitmq
+
+  app-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: payment-processing-backend-ca:latest
+    container_name: payment-processing-ca-app-backend
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${BACKEND_PORT}:${BACKEND_PORT}"
+    env_file:
+      - ./.env
+    volumes:
+      - .:/app
+    command: /bin/sh -c "uvicorn --host 0.0.0.0 --port ${BACKEND_PORT} --loop uvloop ${BACKEND_CONTAINER_COMMAND} src.payment_processing_service.main:app"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:${BACKEND_PORT}/api/v1/healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      wait-for-services:
+        condition: service_completed_successfully
+
+  app-consumer:
+    image: payment-processing-backend-ca:latest
+    container_name: payment-processing-ca-app-consumer
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    env_file:
+      - ./.env
+    volumes:
+      - ./:/app
+    command: /bin/sh -c "python src/payment_processing_service/presentation/consumers/payments.py"
+    restart: always
+    depends_on:
+      wait-for-services:
+        condition: service_completed_successfully
