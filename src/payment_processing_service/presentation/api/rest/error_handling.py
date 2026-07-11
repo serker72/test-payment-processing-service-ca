@@ -1,3 +1,4 @@
+from circuit_breaker.exceptions import CircuitBreakerRemoteCallException
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 from idemptx.exceptions import IdempotencyConflictException, IdempotencyException
@@ -15,6 +16,12 @@ from payment_processing_service.domain.exceptions import (
 
 
 def setup_exception_handlers(app: FastAPI) -> None:
+    @app.exception_handler(CircuitBreakerRemoteCallException)
+    async def circuit_breaker_remote_call_exception_handler(
+        request: Request, exc: CircuitBreakerRemoteCallException
+    ) -> JSONResponse:
+        return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content={"message": str(exc)})
+
     @app.exception_handler(PaymentNotFoundError)
     async def payment_not_found_exception_handler(request: Request, exc: PaymentNotFoundError) -> JSONResponse:
         return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"message": str(exc)})

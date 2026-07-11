@@ -20,7 +20,7 @@ class SendPaymentWebhookClient(SendPaymentWebhookProtocol):
     mapper: InfrastructurePaymentMapper
 
     @stamina.retry(
-        on=(httpx.HTTPError, httpx.RequestError),
+        on=(httpx.HTTPError, httpx.HTTPStatusError, httpx.RequestError),
         attempts=3,
         wait_initial=1.0,
         wait_jitter=1.0,

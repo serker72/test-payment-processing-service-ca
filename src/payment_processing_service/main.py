@@ -1,5 +1,6 @@
 import sys
 
+from circuit_breaker import CircuitBreakerInputDto, CircuitBreakerMiddleware
 from dishka import AsyncContainer, make_async_container
 from dishka.integrations.fastapi import FastapiProvider, setup_dishka
 from fastapi import FastAPI
@@ -53,7 +54,14 @@ app.add_middleware(
     header_name=settings.app.backend_authentication_header_key,
     ignored_endpoints=without_authentication_endpoints,
 )
-
+app.add_middleware(
+    CircuitBreakerMiddleware,
+    circuit_breaker_input=CircuitBreakerInputDto(
+        exception_list=(Exception,),
+        half_open_retry_count=settings.circuit_breaker.circuit_breaker_half_open_retry_count,
+        half_open_retry_timeout_seconds=settings.circuit_breaker.circuit_breaker_half_open_retry_timeout_seconds,
+    ),
+)
 
 FastAPIInstrumentor.instrument_app(app)
 

@@ -1,4 +1,5 @@
 import asyncio
+import sys
 from typing import Any, Dict
 
 from dishka import AsyncContainer, make_async_container
@@ -9,11 +10,19 @@ from faststream.rabbit.annotations import RabbitMessage
 from loguru import logger
 
 from payment_processing_service.application.use_cases.process_payment import ProcessPaymentUseCase
+from payment_processing_service.config import constants as c
 from payment_processing_service.config.settings import Settings
 from payment_processing_service.infrastructures.ioc.di import get_providers
 
 container: AsyncContainer = make_async_container(*(get_providers() + [FastStreamProvider()]))
 settings = container.get_sync(Settings)
+
+log_level = "DEBUG" if settings.app.backend_debug is True else "INFO"
+logger.remove()
+logger.add(sys.stderr, format=c.FORMAT_LOG_CONSUMER, level=log_level)
+log_extra = {"message_id": "-"}
+logger.configure(extra=log_extra)
+
 broker = RabbitBroker(settings.broker_url)
 setup_dishka(container, broker=broker, auto_inject=True)
 
@@ -54,7 +63,8 @@ async def payment_new_handler(
     use_case: FromDishka[ProcessPaymentUseCase],
 ) -> None:
     """Обработка события в очереди RabbitMQ `payments.new`"""
-    return await use_case(message)
+    with logger.contextualize(message_id=raw_message.message_id):
+        return await use_case(message)
 
 
 @broker.subscriber(queue=dlq_queue, exchange=dlx_exchange)

@@ -3,6 +3,7 @@ from pydantic_settings import BaseSettings
 
 from payment_processing_service.config.app import AppSettings
 from payment_processing_service.config.broker import BrokerSettings
+from payment_processing_service.config.circuit_breaker import CircuitBreakerSettings
 from payment_processing_service.config.consumer import ConsumerSettings
 from payment_processing_service.config.cors import CORSSettings
 from payment_processing_service.config.database import DatabaseSettings
@@ -16,6 +17,7 @@ class Settings(BaseSettings):
     broker: BrokerSettings = Field(default_factory=BrokerSettings)
     consumer: ConsumerSettings = Field(default_factory=ConsumerSettings)
     cors: CORSSettings = Field(default_factory=CORSSettings)
+    circuit_breaker: CircuitBreakerSettings = Field(default_factory=CircuitBreakerSettings)
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     open_telemetry: OpenTelemetrySettings = Field(default_factory=OpenTelemetrySettings)
     redis: RedisSettings = Field(default_factory=RedisSettings)

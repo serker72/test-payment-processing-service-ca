@@ -33,4 +33,5 @@ dependencies = [
     "faststream-outbox>=0.10.4",
     "dishka-faststream>=0.7.0",
     "stamina>=26.1.0",
+    "circuit-breaker-fastapi>=0.1.0",
 ]
