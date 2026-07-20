@@ -95,17 +95,18 @@ services:
   app-backend:
     build:
       context: .
-      dockerfile: Dockerfile
-    image: payment-processing-backend-ca:latest
+      dockerfile: Dockerfile.test
+    image: payment-processing-backend-ca-test:latest
     container_name: payment-processing-ca-app-backend
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
       - "${BACKEND_PORT}:${BACKEND_PORT}"
     env_file:
-      - ./.env
+      - ./.env.test
     volumes:
       - .:/app
+      - ./.env.test:/app/.env
     command: /bin/sh -c "uvicorn --host 0.0.0.0 --port ${BACKEND_PORT} --loop uvloop ${BACKEND_CONTAINER_COMMAND} src.payment_processing_service.main:app"
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:${BACKEND_PORT}/api/v1/healthcheck"]
@@ -119,16 +120,52 @@ services:
         condition: service_completed_successfully
 
   app-consumer:
-    image: payment-processing-backend-ca:latest
+    image: payment-processing-backend-ca-test:latest
     container_name: payment-processing-ca-app-consumer
     extra_hosts:
       - "host.docker.internal:host-gateway"
     env_file:
-      - ./.env
+      - ./.env.test
     volumes:
       - ./:/app
+      - ./.env.test:/app/.env
     command: /bin/sh -c "python src/payment_processing_service/presentation/consumers/payments.py"
     restart: always
     depends_on:
       wait-for-services:
         condition: service_completed_successfully
+
+  test-runner:
+    image: payment-processing-backend-ca-test:latest
+    container_name: payment-processing-ca-test-runner
+    env_file:
+      - ./.env.test
+    volumes:
+      - ./:/app
+      - ./.env.test:/app/.env
+      - ./allure-results:/app/allure-results
+      - ./allure-report:/app/default-reports
+    depends_on:
+      - postgres
+      - rabbitmq
+    command: /bin/sh -c "tail -f /dev/null"
+    restart: unless-stopped
+
+  allure:
+    image: "frankescobar/allure-docker-service"
+    environment:
+      CHECK_RESULTS_EVERY_SECONDS: 1
+      KEEP_HISTORY: 1
+    ports:
+      - "5050:5050"
+    volumes:
+      - ./allure-results:/app/allure-results
+      - ./allure-report:/app/default-reports
+
+  allure-ui:
+    image: "frankescobar/allure-docker-service-ui"
+    environment:
+      ALLURE_DOCKER_PUBLIC_API_URL: "http://localhost:5050"
+      ALLURE_DOCKER_PUBLIC_API_URL_PREFIX: ""
+    ports:
+      - "5252:5252"

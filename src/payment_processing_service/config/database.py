@@ -17,6 +17,9 @@ class DatabaseSettings(BaseSettings):
     postgres_db: str = Field("payment_processing")
     postgres_user: str = Field("payment_processing")
     postgres_password: str = Field("payment_processing")
+    postgres_test_db: str = Field("payment_processing_test")
+    postgres_test_user: str = Field("payment_processing_test")
+    postgres_test_password: str = Field("payment_processing_test")
 
     @computed_field
     def database_url(self) -> PostgresDsn:
@@ -28,4 +31,16 @@ class DatabaseSettings(BaseSettings):
             host=self.postgres_host,
             port=self.postgres_port,
             path=self.postgres_db,
+        )
+
+    @computed_field
+    def test_database_url(self) -> PostgresDsn:
+        """Получение URL подключения к серверу PostgreSQL, БД test"""
+        return PostgresDsn.build(
+            scheme="postgresql+asyncpg",
+            username=self.postgres_test_user,
+            password=self.postgres_test_password,
+            host=self.postgres_host,
+            port=self.postgres_port,
+            path=self.postgres_test_db,
         )

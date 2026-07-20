@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: payment-processing
+  labels:
+    app: payment-processing
+    component: postgres
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: payment-processing
+      component: postgres
+  template:
+    metadata:
+      labels:
+        app: payment-processing
+        component: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:17.5
+          ports:
+            - containerPort: 5432
+              name: postgres
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: payment-processing-secret
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_MULTIPLE_DATABASES
+#              value: "payments::postgres::postgres|payments_test::postgres::postgres"
+              valueFrom:
+                secretKeyRef:
+                  name: payment-processing-secret
+                  key: POSTGRES_MULTIPLE_DATABASES
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          readinessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -c
+                - pg_isready -U postgres
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -c
+                - pg_isready -U postgres
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+            - name: init-scripts
+              mountPath: /docker-entrypoint-initdb.d
+      volumes:
+        - name: init-scripts
+          configMap:
+            name: payment-processing-config
+            items:
+              - key: create-multiple-postgresql-databases.sh
+                path: create-multiple-postgresql-databases.sh
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: standard
+        resources:
+          requests:
+            storage: 10Gi

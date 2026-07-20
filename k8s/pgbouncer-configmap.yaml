@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pgbouncer-config
+  namespace: payment-processing
+  labels:
+    app: payment-processing
+    component: pgbouncer
+data:
+  pgbouncer.ini: |
+    [databases]
+    payments = host=postgres-service port=5432 dbname=payments
+    payments_test = host=postgres-service port=5432 dbname=payments_test
+
+    [pgbouncer]
+    listen_addr = 0.0.0.0
+    listen_port = 6432
+    pool_mode = transaction
+    max_client_conn = 1000
+    default_pool_size = 20
+    min_pool_size = 5
+    reserve_pool_size = 5
+    reserve_pool_timeout = 3
+    server_lifetime = 3600
+    server_idle_timeout = 600
+    server_connect_timeout = 15
+    server_login_retry_time = 15
+    query_timeout = 30
+    query_wait_timeout = 120
+    client_idle_timeout = 0
+    client_login_timeout = 60
+    log_connections = 1
+    log_disconnections = 1
+    log_pooler_errors = 1
+    stats_period = 60
+    admin_users = postgres
+  userlist.txt: |
+    postgres "2c64c8bdbadbff914f6e849148b6e1b67bcf7b9b2b76dc9e089d255c02787e1e"
+    payment_processing "2c64c8bdbadbff914f6e849148b6e1b67bcf7b9b2b76dc9e089d255c02787e1e"
+    payment_processing_test "2c64c8bdbadbff914f6e849148b6e1b67bcf7b9b2b76dc9e089d255c02787e1e"

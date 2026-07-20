@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: pgbouncer-service
+  namespace: payment-processing
+  labels:
+    app: payment-processing
+    component: pgbouncer
+spec:
+  type: ClusterIP
+  ports:
+    - port: 6432
+      targetPort: 6432
+      protocol: TCP
+      name: pgbouncer
+  selector:
+    app: payment-processing
+    component: pgbouncer

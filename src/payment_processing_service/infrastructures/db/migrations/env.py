@@ -28,10 +28,12 @@ target_metadata = None
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
 settings = Settings()
+is_test = context.get_x_argument(as_dictionary=True).get("is_test", "false").lower() in {"true", "1", "yes"}
+print(f"is_test={repr(is_test)}")
 
 config.set_main_option(
     "sqlalchemy.url",
-    settings.database_url,
+    settings.test_database_url if is_test else settings.database_url,
 )
 
 

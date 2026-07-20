@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pgbouncer
+  namespace: payment-processing
+  labels:
+    app: payment-processing
+    component: pgbouncer
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: payment-processing
+      component: pgbouncer
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: payment-processing
+        component: pgbouncer
+    spec:
+      containers:
+        - name: pgbouncer
+          image: edoburu/pgbouncer:v1.24.1-p1
+          ports:
+            - containerPort: 6432
+              name: pgbouncer
+              protocol: TCP
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: payment-processing-secret
+                  key: POSTGRES_PASSWORD
+          args:
+            - /etc/pgbouncer/pgbouncer.ini
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
+          readinessProbe:
+            tcpSocket:
+              port: 6432
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: 6432
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          volumeMounts:
+            - name: pgbouncer-config
+              mountPath: /etc/pgbouncer/pgbouncer.ini
+              subPath: pgbouncer.ini
+              readOnly: true
+      volumes:
+        - name: pgbouncer-config
+          configMap:
+            name: pgbouncer-config

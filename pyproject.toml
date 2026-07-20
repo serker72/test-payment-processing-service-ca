@@ -35,3 +35,64 @@ dependencies = [
     "stamina>=26.1.0",
     "circuit-breaker-fastapi>=0.1.0",
 ]
+
+[project.optional-dependencies]
+dev = [
+    "aiosqlite>=0.20.0",
+    "allure-pytest>=2.16.0",
+    "faker>=40.28.1",
+    "httpx>=0.28.0",
+    "polyfactory>=3.3.0",
+    "psycopg[binary]==3.3.4",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
+    "pytest-postgresql>=8.0.0",
+    "pytest-rabbitmq>=4.0.0",
+    "pytest-dependency>=0.6.0",
+    "pytest-timeout>=2.4.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+addopts = "-v --tb=short --alluredir=allure-results"
+markers = [
+    "unit: Unit tests that don't require external services",
+    "integration: Integration tests that require PostgreSQL/RabbitMQ",
+    "dependency: Tests that depend on other tests",
+    "teardown_timeout: Timeout for test teardown",
+    "timeout: Timeout for test execution",
+]
+
+[tool.coverage.run]
+source = ["src/payment_processing_service"]
+omit = [
+    "*/migrations/*",
+    "*/__init__.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+]
+
+[dependency-groups]
+dev = [
+    "aiosqlite>=0.22.1",
+    "allure-pytest>=2.16.0",
+    "faker>=40.28.1",
+    "polyfactory>=3.3.0",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
+    "pytest-postgresql>=8.1.0",
+    "pytest-rabbitmq>=4.0.0",
+    "pytest-dependency>=0.6.0",
+    "pytest-timeout>=2.4.0",
+]
