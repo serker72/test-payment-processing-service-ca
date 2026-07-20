@@ -29,6 +29,11 @@ class Settings(BaseSettings):
         return str(self.database.database_url)
 
     @property
+    def test_database_url(self) -> str:
+        """Получение URL подключения к серверу PostgreSQL, БД test"""
+        return str(self.database.test_database_url)
+
+    @property
     def redis_url(self) -> str:
         """Получение URL подключения к серверу Redis"""
         return str(self.redis.redis_url)

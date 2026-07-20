@@ -70,7 +70,7 @@ docker compose build
 - применить миграции БД, убедиться в отсутствии ошибок
 ```shell
 cd /opt/test-payment-processing-service-ca
-docker compose -f docker-compose.db-update.yml up -d && docker logs -f payment-processing-ca-db-update
+docker compose -f docker-compose.db-update.yml up -d && docker logs -f payment-processing-ca-db-update && docker logs -f payment-processing-ca-db-test-update
 docker compose -f docker-compose.db-update.yml down
 ```
 - запустить сервис

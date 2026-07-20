@@ -15,8 +15,14 @@ wheels/
 # Ruff cache
 *.ruff_cache
 
+# Allure test reports
+allure-results/
+allure-report/
+allure-history/
+
 # Files
 .env
 .env.docker
 .env.loc
+.env.test
 #config_services/pgbouncer/userlist.txt

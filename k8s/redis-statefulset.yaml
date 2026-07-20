@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  namespace: payment-processing
+  labels:
+    app: payment-processing
+    component: redis
+spec:
+  serviceName: redis
+  replicas: 1
+  selector:
+    matchLabels:
+      app: payment-processing
+      component: redis
+  template:
+    metadata:
+      labels:
+        app: payment-processing
+        component: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:8.0.2-bookworm
+          command:
+            - /bin/sh
+            - -c
+            - "redis-server --requirepass $(REDIS_PASSWORD)"
+          ports:
+            - containerPort: 6379
+              name: redis
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: payment-processing-secret
+                  key: REDIS_PASSWORD
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "250m"
+          readinessProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+  volumeClaimTemplates:
+    - metadata:
+        name: redis-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: standard
+        resources:
+          requests:
+            storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  namespace: payment-processing
+  labels:
+    app: payment-processing
+    component: redis
+spec:
+  type: ClusterIP
+  ports:
+    - port: 6379
+      targetPort: 6379
+      protocol: TCP
+      name: redis
+  selector:
+    app: payment-processing
+    component: redis
