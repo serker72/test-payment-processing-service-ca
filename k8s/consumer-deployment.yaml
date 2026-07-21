@@ -51,7 +51,7 @@ spec:
               command:
                 - /bin/sh
                 - -c
-                - "pgrep -f 'payments.py' || exit 1"
+                - "pgrep -f 'rabbit.py' || exit 1"
             initialDelaySeconds: 30
             periodSeconds: 30
             timeoutSeconds: 5

@@ -17,13 +17,15 @@ class SendPaymentWebhookUseCase:
     http_client: SendPaymentWebhookProtocol
     payment_mapper: DtoPaymentEntityMapperProtocol
 
-    async def __call__(self, payment_dto: PaymentDTO) -> None:
+    async def __call__(self, payment_dto: PaymentDTO) -> bool:
         """Выполняет сценарий отправки вебхука для платежа."""
         try:
             await self.http_client.send_webhook(payment_dto)
             logger.info(f"Webhook for payment send successful, id={payment_dto.id}, url={payment_dto.webhook_url}")
-        except WebhookDeliveryError as e:
+            return True
+        # except WebhookDeliveryError as e:
+        except Exception as e:
             logger.exception(
                 f"Failed to send webhook for payment, id={payment_dto.id}, url={payment_dto.webhook_url}, error={str(e)}"
             )
-            # raise FailedPublishArtifactInCatalogException("Could not publish payment to catalog", str(e)) from e
+            return False

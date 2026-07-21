@@ -23,7 +23,7 @@ logger.add(sys.stderr, format=c.FORMAT_LOG_CONSUMER, level=log_level)
 log_extra = {"message_id": "-"}
 logger.configure(extra=log_extra)
 
-broker = RabbitBroker(settings.broker_url)
+broker = RabbitBroker(settings.rabbit_broker_url)
 setup_dishka(container, broker=broker, auto_inject=True)
 
 payment_exchange = RabbitExchange(settings.consumer.consumer_exchange_name, type=ExchangeType.TOPIC, durable=True)

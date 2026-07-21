@@ -15,8 +15,6 @@ from payment_processing_service.infrastructures.db.models.payment import Payment
 
 
 @pytest.mark.unit
-
-
 def _create_entity() -> PaymentEntity:
     """Создаёт PaymentEntity для тестов."""
     return PaymentEntity(

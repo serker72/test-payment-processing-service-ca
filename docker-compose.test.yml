@@ -119,9 +119,9 @@ services:
       wait-for-services:
         condition: service_completed_successfully
 
-  app-consumer:
+  app-consumer-rabbit:
     image: payment-processing-backend-ca-test:latest
-    container_name: payment-processing-ca-app-consumer
+    container_name: payment-processing-ca-app-consumer-rabbit
     extra_hosts:
       - "host.docker.internal:host-gateway"
     env_file:
@@ -129,7 +129,23 @@ services:
     volumes:
       - ./:/app
       - ./.env.test:/app/.env
-    command: /bin/sh -c "python src/payment_processing_service/presentation/consumers/payments.py"
+    command: /bin/sh -c "python src/payment_processing_service/presentation/consumers/rabbit.py"
+    restart: always
+    depends_on:
+      wait-for-services:
+        condition: service_completed_successfully
+
+  app-consumer-kafka:
+    image: payment-processing-backend-ca-test:latest
+    container_name: payment-processing-ca-app-consumer-kafka
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    env_file:
+      - ./.env.test
+    volumes:
+      - ./:/app
+      - ./.env.test:/app/.env
+    command: /bin/sh -c "python src/payment_processing_service/presentation/consumers/kafka.py"
     restart: always
     depends_on:
       wait-for-services:

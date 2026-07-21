@@ -3,6 +3,7 @@ from collections.abc import AsyncIterator
 from typing import AsyncIterable
 
 from dishka import Provider, Scope, provide
+from faststream.kafka import KafkaBroker
 from faststream.rabbit.fastapi import RabbitBroker
 from httpx import AsyncClient
 from idemptx.backend import AsyncRedisBackend
@@ -34,6 +35,7 @@ from payment_processing_service.application.use_cases.publish_payment_to_broker 
 from payment_processing_service.application.use_cases.save_payment_to_repo import SavePaymentToRepoUseCase
 from payment_processing_service.application.use_cases.send_payment_webhook import SendPaymentWebhookUseCase
 from payment_processing_service.config.settings import Settings
+from payment_processing_service.infrastructures.broker.kafka import KafkaPublisher
 from payment_processing_service.infrastructures.broker.rabbit import RabbitPublisher
 from payment_processing_service.infrastructures.db.mappers import PaymentDBMapper
 from payment_processing_service.infrastructures.db.payment_uow import PaymentSQLAlchemyUnitOfWork
@@ -65,9 +67,19 @@ class HTTPClientProvider(Provider):
 
 class BrokerProvider(Provider):
     @provide(scope=Scope.APP)
-    async def get_broker(self, settings: Settings) -> AsyncIterator[RabbitBroker]:
+    async def get_broker_rabbit(self, settings: Settings) -> AsyncIterator[RabbitBroker]:
         """Предоставляет экземпляр RabbitBroker."""
-        broker = RabbitBroker(settings.broker_url)
+        broker = RabbitBroker(settings.rabbit_broker_url)
+        try:
+            await broker.start()
+            yield broker
+        finally:
+            await broker.stop()
+
+    @provide(scope=Scope.APP)
+    async def get_broker_kafka(self, settings: Settings) -> AsyncIterator[KafkaBroker]:
+        """Предоставляет экземпляр KafkaBroker."""
+        broker = KafkaBroker(settings.kafka_broker_url)
         try:
             await broker.start()
             yield broker
@@ -154,15 +166,43 @@ class ServiceProvider(Provider):
             mapper=infrastructure_mapper,
         )
 
+    # @provide(scope=Scope.REQUEST)
+    # def get_message_broker(
+    #     self,
+    #     settings: Settings,
+    #     broker: RabbitBroker,
+    #     infrastructure_mapper: PaymentSerializationMapperProtocol,
+    # ) -> PaymentMessageBrokerPublisherProtocol:
+    #     """Предоставляет реализацию MessageBrokerPublisherProtocol."""
+    #     return RabbitPublisher(
+    #         settings=settings,
+    #         broker=broker,
+    #         mapper=infrastructure_mapper,
+    #     )
+
     @provide(scope=Scope.REQUEST)
-    def get_message_broker(
+    def get_message_broker_rabbit(
         self,
         settings: Settings,
         broker: RabbitBroker,
         infrastructure_mapper: PaymentSerializationMapperProtocol,
-    ) -> PaymentMessageBrokerPublisherProtocol:
-        """Предоставляет реализацию MessageBrokerPublisherProtocol."""
+    ) -> RabbitPublisher:
+        """Предоставляет RabbitMQ реализацию MessageBrokerPublisherProtocol."""
         return RabbitPublisher(
+            settings=settings,
+            broker=broker,
+            mapper=infrastructure_mapper,
+        )
+
+    @provide(scope=Scope.REQUEST)
+    def get_message_broker_kafka(
+        self,
+        settings: Settings,
+        broker: KafkaBroker,
+        infrastructure_mapper: PaymentSerializationMapperProtocol,
+    ) -> KafkaPublisher:
+        """Предоставляет Kafka реализацию MessageBrokerPublisherProtocol."""
+        return KafkaPublisher(
             settings=settings,
             broker=broker,
             mapper=infrastructure_mapper,
@@ -220,11 +260,18 @@ class UseCaseProvider(Provider):
     @provide(scope=Scope.REQUEST)
     def get_publish_payment_to_broker_use_case(
         self,
-        message_broker: PaymentMessageBrokerPublisherProtocol,
+        # message_broker: PaymentMessageBrokerPublisherProtocol,
+        message_broker_rabbit: RabbitPublisher,
+        message_broker_kafka: KafkaPublisher,
         payment_mapper: DtoPaymentEntityMapperProtocol,
     ) -> PublishPaymentToBrokerUseCase:
         """Предоставляет экземпляр PublishPaymentToBrokerUseCase."""
-        return PublishPaymentToBrokerUseCase(message_broker=message_broker, payment_mapper=payment_mapper)
+        # return PublishPaymentToBrokerUseCase(message_broker=message_broker, payment_mapper=payment_mapper)
+        return PublishPaymentToBrokerUseCase(
+            message_rabbit_broker=message_broker_rabbit,
+            message_kafka_broker=message_broker_kafka,
+            payment_mapper=payment_mapper,
+        )
 
     @provide(scope=Scope.REQUEST)
     def get_create_payment_use_case(

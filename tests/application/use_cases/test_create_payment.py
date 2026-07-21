@@ -18,8 +18,6 @@ from payment_processing_service.config.enums import PaymentStatusEnum
 
 
 @pytest.mark.unit
-
-
 def _create_dto(**kwargs) -> PaymentDTO:
     """Фабрика PaymentDTO."""
     return PaymentDTO(

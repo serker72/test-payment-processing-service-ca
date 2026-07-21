@@ -69,6 +69,43 @@ services:
       retries: 3
     restart: always
 
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.7.0
+    container_name: payment-processing-ca-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: ${ZOOKEEPER_PORT:-2181}
+      ZOOKEEPER_SERVER_ID: ${ZOOKEEPER_SERVER_ID:-1}
+#      ZOOKEEPER_SERVERS: zookeeper:2888:3888
+    ports:
+      - "${ZOOKEEPER_PORT}:${ZOOKEEPER_PORT}"
+    volumes:
+      - ${ZOOKEEPER_DATA_DIR:-/opt/payment-processing-data/zookeeper}:/var/lib/zookeeper/
+    restart: always
+
+  kafka:
+    image: confluentinc/cp-kafka:7.7.0
+    container_name: payment-processing-ca-kafka
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:${ZOOKEEPER_PORT}"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:${KAFKA_PORT}"
+      KAFKA_LISTENERS: "PLAINTEXT://0.0.0.0:${KAFKA_PORT}"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+#      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+#      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+#      KAFKA_LOG4J_LOGGERS: "kafka.controller=INFO,kafka.producer.async.DefaultEventHandler=INFO,state.change.logger=INFO"
+#      KAFKA_AUTHORIZER_CLASS_NAME: kafka.security.authorizer.AclAuthorizer
+#      KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND: "true"
+    ports:
+      - "${KAFKA_PORT}:${KAFKA_PORT}"
+    volumes:
+      - ${KAFKA_DATA_DIR:-/opt/payment-processing-data/kafka}:/var/lib/kafka/
+    depends_on:
+      - zookeeper
+    restart: always
+
   jaeger:
     image: jaegertracing/all-in-one:1.76.0
     container_name: payment-processing-ca-jaeger
@@ -118,16 +155,31 @@ services:
       wait-for-services:
         condition: service_completed_successfully
 
-  app-consumer:
+  app-consumer-rabbit:
     image: payment-processing-backend-ca:latest
-    container_name: payment-processing-ca-app-consumer
+    container_name: payment-processing-ca-app-consumer-rabbit
     extra_hosts:
       - "host.docker.internal:host-gateway"
     env_file:
       - ./.env
     volumes:
       - ./:/app
-    command: /bin/sh -c "python src/payment_processing_service/presentation/consumers/payments.py"
+    command: /bin/sh -c "python src/payment_processing_service/presentation/consumers/rabbit.py"
+    restart: always
+    depends_on:
+      wait-for-services:
+        condition: service_completed_successfully
+
+  app-consumer-kafka:
+    image: payment-processing-backend-ca:latest
+    container_name: payment-processing-ca-app-consumer-kafka
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    env_file:
+      - ./.env
+    volumes:
+      - ./:/app
+    command: /bin/sh -c "python src/payment_processing_service/presentation/consumers/kafka.py"
     restart: always
     depends_on:
       wait-for-services:
