@@ -64,9 +64,10 @@ services:
       - ${RABBITMQ_DATA_DIR:-/opt/payment-processing-data/rabbitmq}:/var/lib/rabbitmq/
     healthcheck:
       test: rabbitmq-diagnostics -q ping
-      interval: 30s
-      timeout: 30s
-      retries: 3
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
     restart: always
 
   jaeger:
@@ -82,15 +83,57 @@ services:
       - COLLECTOR_ZIPKIN_HOST_PORT=:9411  # Включение совместимости
     restart: unless-stopped
 
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.7.0
+    container_name: payment-processing-ca-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: ${ZOOKEEPER_PORT:-2181}
+      ZOOKEEPER_SERVER_ID: ${ZOOKEEPER_SERVER_ID:-1}
+    ports:
+      - "0.0.0.0:${ZOOKEEPER_PORT:-2181}:${ZOOKEEPER_PORT:-2181}"
+    volumes:
+      - ${ZOOKEEPER_DATA_DIR:-/opt/payment-processing-data/zookeeper}:/var/lib/zookeeper/
+    restart: always
+
+  kafka:
+    image: confluentinc/cp-kafka:7.7.0
+    container_name: payment-processing-ca-kafka
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:${ZOOKEEPER_PORT:-2181}"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:${KAFKA_PORT:-9092}"
+      KAFKA_LISTENERS: "PLAINTEXT://0.0.0.0:${KAFKA_PORT:-9092}"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+    ports:
+      - "0.0.0.0:${KAFKA_PORT:-9092}:${KAFKA_PORT:-9092}"
+    volumes:
+      - ${KAFKA_DATA_DIR:-/opt/payment-processing-data/kafka}:/var/lib/kafka/
+    depends_on:
+      - zookeeper
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 120s
+
   wait-for-services:
     image: atkrad/wait4x
     container_name: payment-processing-ca-wait-for-services
-    command: tcp redis:${REDIS_PORT} pgbouncer:${POSTGRES_PORT} rabbitmq:${RABBITMQ_MANAGEMENT_PORT} --timeout 60s --interval 5s --backoff-policy exponential --backoff-exponential-coefficient 2.0 --backoff-exponential-max-interval 120s
+    command: tcp redis:${REDIS_PORT} pgbouncer:${POSTGRES_PORT} rabbitmq:${RABBITMQ_MANAGEMENT_PORT} kafka:${KAFKA_PORT} --timeout 180s --interval 10s --backoff-policy exponential --backoff-exponential-coefficient 2.0 --backoff-exponential-max-interval 300s
     restart: "no"
     depends_on:
-      - redis
-      - pgbouncer
-      - rabbitmq
+      redis:
+        condition: service_healthy
+      pgbouncer:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
 
   app-backend:
     build:
@@ -164,6 +207,7 @@ services:
     depends_on:
       - postgres
       - rabbitmq
+      - kafka
     command: /bin/sh -c "tail -f /dev/null"
     restart: unless-stopped
 

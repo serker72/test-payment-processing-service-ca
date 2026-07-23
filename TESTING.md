@@ -28,7 +28,7 @@ uv run pytest tests/infrastructure/ -v
 uv run pytest tests/presentation/ -v
 ```
 
-### 2. Интеграционные тесты (PostgreSQL + Redis + RabbitMQ в Docker)
+### 2. Интеграционные тесты (PostgreSQL + Redis + RabbitMQ + Kafka в Docker)
 
 ```bash
 # Запуск всех интеграционных тестов
@@ -37,6 +37,12 @@ docker compose -f docker-compose.test.yml exec test-runner pytest tests/integrat
 # Запуск конкретных типов тестов
 docker compose -f docker-compose.test.yml exec test-runner pytest tests/integration/ -v -m "api"
 docker compose -f docker-compose.test.yml exec test-runner pytest tests/integration/ -v -m "integration"
+
+# Только Kafka-тесты
+docker compose -f docker-compose.test.yml exec test-runner pytest tests/integration/test_integration.py::TestKafkaIntegration -v
+
+# Только RabbitMQ-тесты
+docker compose -f docker-compose.test.yml exec test-runner pytest tests/integration/test_integration.py::TestRabbitMQIntegration -v
 
 # Запуск конкретного файла
 docker compose -f docker-compose.test.yml exec test-runner pytest tests/integration/test_api_dishka.py -v
@@ -47,7 +53,7 @@ docker compose -f docker-compose.test.yml exec test-runner pytest tests/integrat
 ### 1. Запуск контейнера test-runner
 
 ```bash
-# Запуск всех сервисов (PostgreSQL, Redis, RabbitMQ, Jaeger, Backend, Consumer)
+# Запуск всех сервисов (PostgreSQL, Redis, RabbitMQ, Kafka, Jaeger, Backend, Consumer)
 docker compose -f docker-compose.test.yml up -d
 
 # Запуск контейнера для тестов (остается запущенным)
@@ -73,8 +79,11 @@ docker compose -f docker-compose.test.yml exec test-runner pytest tests/ -v --co
 # Только API-тесты (тестируют API-слой с мокированной инфраструктурой)
 docker compose -f docker-compose.test.yml exec test-runner pytest tests/integration/ -v -m "api"
 
-# Только тесты с внешними сервисами (PostgreSQL, RabbitMQ)
+# Только тесты с внешними сервисами (PostgreSQL, RabbitMQ, Kafka)
 docker compose -f docker-compose.test.yml exec test-runner pytest tests/integration/ -v -m "integration"
+
+# Только Kafka-тесты
+docker compose -f docker-compose.test.yml exec test-runner pytest tests/integration/ -v -k "kafka"
 
 # Только unit-тесты
 docker compose -f docker-compose.test.yml exec test-runner pytest tests/domain/ tests/application/ -v
@@ -108,7 +117,7 @@ tests/
 │   └── helpers/                         # Helpers (CustomJSON, etc.)
 └── integration/
     ├── test_api_dishka.py               # Интеграционные тесты API (моки инфраструктуры) [маркер: api]
-    └── test_integration.py              # Интеграционные тесты с PostgreSQL + RabbitMQ [маркер: integration]
+    └── test_integration.py              # Интеграционные тесты с PostgreSQL + RabbitMQ + Kafka [маркер: integration]
 ```
 
 ## Маркеры тестов
@@ -117,11 +126,28 @@ tests/
 # Только API-тесты (тестируют API-слой с мокированной инфраструктурой)
 pytest tests/integration/ -v -m "api"
 
-# Только тесты с внешними сервисами (PostgreSQL, RabbitMQ)
+# Только тесты с внешними сервисами (PostgreSQL, RabbitMQ, Kafka)
 pytest tests/integration/ -v -m "integration"
+
+# Только Kafka-тесты
+pytest tests/ -v -k "kafka"
 
 # Все тесты
 pytest tests/ -v
+```
+
+## Интеграционные тесты с Kafka
+
+Kafka-тесты находятся в `tests/integration/test_integration.py` в классе `TestKafkaIntegration`:
+
+- `test_kafka_connection` — проверка подключения к Kafka, публикация и чтение сообщения
+- `test_kafka_dlq_ttl_config` — проверка конфигурации DLQ-темы (TTL = 7 дней / 604800000 мс)
+- `test_kafka_publish_and_consume` — публикация JSON-сообщения и чтение через consumer
+
+Для запуска:
+
+```bash
+docker compose -f docker-compose.test.yml exec test-runner pytest tests/integration/test_integration.py::TestKafkaIntegration -v
 ```
 
 ## Фикстуры

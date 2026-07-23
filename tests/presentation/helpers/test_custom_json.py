@@ -1,8 +1,10 @@
 """Тесты для helpers presentation layer."""
 
 import json
+from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
+from enum import Enum
 from uuid import UUID, uuid4
 
 import pytest
@@ -15,6 +17,22 @@ from payment_processing_service.presentation.utils.helpers.custom_json import (
     dumps,
     loads,
 )
+
+
+class PaymentStatusEnum(Enum):
+    """Тестовый Enum для сериализации."""
+
+    PENDING = "pending"
+    SUCCESS = "success"
+    FAILED = "failed"
+
+
+@dataclass
+class TestDataclass:
+    """Тестовый dataclass для сериализации."""
+
+    name: str
+    value: int
 
 
 class SamplePydanticModel(BaseModel):
@@ -101,6 +119,73 @@ class TestCustomJsonEncoder:
         result = json.dumps(data, cls=CustomJsonEncoder)
         parsed = json.loads(result)
         assert parsed["value"] is None
+
+    def test_encodes_enum(self):
+        """Должен сериализовать Enum как его value."""
+        result = json.dumps(PaymentStatusEnum.PENDING, cls=CustomJsonEncoder)
+        assert '"pending"' in result
+
+    def test_encodes_dataclass(self):
+        """Должен сериализовать dataclass как dict."""
+        dc = TestDataclass(name="test", value=42)
+        result = json.dumps(dc, cls=CustomJsonEncoder)
+        parsed = json.loads(result)
+        assert parsed["name"] == "test"
+        assert parsed["value"] == 42
+
+    def test_encodes_bytes(self):
+        """Должен сериализовать bytes как строку."""
+        data = b"hello"
+        result = json.dumps(data, cls=CustomJsonEncoder)
+        assert '"hello"' in result
+
+    def test_encodes_nested_dict(self):
+        """Должен рекурсивно сериализовать dict с вложенными данными."""
+        data = {"level1": {"level2": Decimal("100")}}
+        result = json.dumps(data, cls=CustomJsonEncoder)
+        parsed = json.loads(result)
+        assert parsed["level1"]["level2"] == 100.0
+
+    def test_encodes_nested_list(self):
+        """Должен рекурсивно сериализовать list с вложенными данными."""
+        data = [Decimal("100"), Decimal("200"), Decimal("300")]
+        result = json.dumps(data, cls=CustomJsonEncoder)
+        parsed = json.loads(result)
+        assert parsed == [100.0, 200.0, 300.0]
+
+    def test_encodes_dict_with_list_values(self):
+        """Должен сериализовать dict с list значений (покрывает рекурсию dict->list)."""
+        data = {"values": [Decimal("100"), Decimal("200")]}
+        result = json.dumps(data, cls=CustomJsonEncoder)
+        parsed = json.loads(result)
+        assert parsed["values"] == [100.0, 200.0]
+
+    def test_encodes_list_with_dict_values(self):
+        """Должен сериализовать list с dict значений (покрывает рекурсию list->dict)."""
+        data = [{"amount": Decimal("100")}, {"amount": Decimal("200")}]
+        result = json.dumps(data, cls=CustomJsonEncoder)
+        parsed = json.loads(result)
+        assert parsed == [{"amount": 100.0}, {"amount": 200.0}]
+
+    def test_encodes_int(self):
+        """Должен сериализовать int."""
+        result = json.dumps(42, cls=CustomJsonEncoder)
+        assert "42" in result
+
+    def test_encodes_str(self):
+        """Должен сериализовать str."""
+        result = json.dumps("hello", cls=CustomJsonEncoder)
+        assert '"hello"' in result
+
+    def test_encodes_float(self):
+        """Должен сериализовать float."""
+        result = json.dumps(3.14, cls=CustomJsonEncoder)
+        assert "3.14" in result
+
+    def test_encodes_bool(self):
+        """Должен сериализовать bool."""
+        result = json.dumps(True, cls=CustomJsonEncoder)
+        assert "true" in result
 
     def test_encodes_nested_structures(self):
         """Должен сериализовать вложенные структуры."""

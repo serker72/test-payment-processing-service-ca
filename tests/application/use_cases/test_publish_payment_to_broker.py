@@ -41,6 +41,15 @@ class TestPublishPaymentToBrokerUseCase:
     @pytest.fixture
     def mock_broker(self):
         mock = AsyncMock()
+        mock.publish = AsyncMock()
+        mock.broker = AsyncMock()
+        return mock
+
+    @pytest.fixture
+    def mock_rabbit_broker(self):
+        mock = AsyncMock()
+        mock.publish = AsyncMock()
+        mock.broker = AsyncMock()
         return mock
 
     @pytest.fixture
@@ -50,9 +59,10 @@ class TestPublishPaymentToBrokerUseCase:
         return mock
 
     @pytest.fixture
-    def use_case(self, mock_broker, mock_mapper):
+    def use_case(self, mock_broker, mock_rabbit_broker, mock_mapper):
         return PublishPaymentToBrokerUseCase(
-            message_broker=mock_broker,
+            message_kafka_broker=mock_broker,
+            message_rabbit_broker=mock_rabbit_broker,
             payment_mapper=mock_mapper,
         )
 

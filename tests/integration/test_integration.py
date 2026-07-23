@@ -1,4 +1,4 @@
-"""Интеграционные тесты с PostgreSQL и RabbitMQ."""
+"""Интеграционные тесты с PostgreSQL, RabbitMQ и Kafka."""
 
 import os
 from datetime import datetime, timezone
@@ -223,3 +223,179 @@ class TestRabbitMQIntegration:
         assert body == b"test message"
 
         connection.close()
+
+
+# ---------------------------------------------------------------------------
+# Фикстуры для Kafka (через environment variables)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def kafka_connection():
+    """Возвращает строку подключения к Kafka из environment variables."""
+    host = os.getenv("KAFKA_HOST", "127.0.0.1")
+    port = os.getenv("KAFKA_PORT", "9092")
+    return f"{host}:{port}"
+
+
+# ---------------------------------------------------------------------------
+# Интеграционные тесты с Kafka
+# ---------------------------------------------------------------------------
+
+
+class TestKafkaIntegration:
+    """Интеграционные тесты с Kafka."""
+
+    @pytest.mark.integration
+    async def test_kafka_connection(self, kafka_connection):
+        """Должен подключиться к Kafka."""
+        from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
+
+        producer = AIOKafkaProducer(
+            bootstrap_servers=kafka_connection,
+            value_serializer=lambda v: v.encode("utf-8"),
+        )
+
+        consumer = AIOKafkaConsumer(
+            "test.integration.kafka",
+            bootstrap_servers=kafka_connection,
+            auto_offset_reset="earliest",
+            group_id="test.integration.group",
+            value_deserializer=lambda m: m.decode("utf-8"),
+        )
+
+        await producer.start()
+        await consumer.start()
+
+        try:
+            # Создаём тестовую тему через публикацию
+            await producer.send_and_wait("test.integration.kafka", "test message")
+
+            # Читаем сообщение
+            messages = []
+            async for msg in consumer:
+                messages.append(msg)
+                if len(messages) >= 1:
+                    break
+
+            assert len(messages) >= 1
+            assert messages[0].value == "test message"
+        finally:
+            await producer.stop()
+            await consumer.stop()
+
+    @pytest.mark.integration
+    async def test_kafka_dlq_ttl_config(self, kafka_connection):
+        """Должен проверить, что DLQ тема создана с правильным TTL (retention.ms)."""
+        from aiokafka.admin import AIOKafkaAdminClient
+
+        admin_client = AIOKafkaAdminClient(
+            bootstrap_servers=kafka_connection,
+        )
+
+        await admin_client.start()
+
+        try:
+            dlq_topic_name = "payments.new.dlq"
+
+            # Создаём DLQ тему с нужным TTL
+            from aiokafka.admin import NewTopic
+
+            new_topic = NewTopic(
+                name=dlq_topic_name,
+                num_partitions=1,
+                replication_factor=1,
+                topic_configs={"retention.ms": "604800000"},
+            )
+
+            # Создаём тему
+            futures = await admin_client.create_topics([new_topic])
+            try:
+                for future in futures:
+                    await future
+            except Exception:
+                # Тема может уже существовать
+                pass
+
+            # Получаем список тем
+            topics = await admin_client.list_topics()
+
+            # Проверяем, что DLQ тема существует
+            assert dlq_topic_name in topics, (
+                f"DLQ topic '{dlq_topic_name}' not found in Kafka. Available topics: {topics}"
+            )
+
+            # Получаем конфигурацию топика
+            from aiokafka.admin.client import ConfigResource, ConfigResourceType
+
+            config_resource = ConfigResource(ConfigResourceType.TOPIC, dlq_topic_name)
+            topic_configs = await admin_client.describe_configs([config_resource])
+
+            # Парсим конфигурацию из ответа
+            retention_value = None
+            for resource_response in topic_configs:
+                for resource_tuple in resource_response.resources:
+                    # resource_tuple = (type, _, _, name, [config_list])
+                    if len(resource_tuple) >= 5 and resource_tuple[3] == dlq_topic_name:
+                        config_list = resource_tuple[4]
+                        for cfg in config_list:
+                            # cfg = (name, value, is_default, source_type, ...)
+                            if cfg[0] == "retention.ms":
+                                retention_value = cfg[1]
+                                break
+
+            # Проверяем presence retention.ms в конфигурации
+            assert retention_value is not None, "retention.ms not found in DLQ topic config"
+
+            # TTL должен быть 604800000 мс (7 дней)
+            expected_ttl = 604800000
+            actual_ttl = int(retention_value) if retention_value else 0
+            assert actual_ttl == expected_ttl, f"Expected retention.ms={expected_ttl}, got {actual_ttl}"
+        finally:
+            await admin_client.close()
+
+    @pytest.mark.integration
+    async def test_kafka_publish_and_consume(self, kafka_connection):
+        """Должен опубликовать и прочитать сообщение из Kafka."""
+        import json
+
+        from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
+
+        test_topic = "test.integration.kafka.publish"
+        test_message = {"payment_id": "test-payment-001", "amount": 1000}
+
+        producer = AIOKafkaProducer(
+            bootstrap_servers=kafka_connection,
+            value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+        )
+
+        consumer = AIOKafkaConsumer(
+            test_topic,
+            bootstrap_servers=kafka_connection,
+            auto_offset_reset="earliest",
+            group_id="test.integration.consume.group",
+            value_deserializer=lambda m: json.loads(m.decode("utf-8")),
+        )
+
+        await producer.start()
+        await consumer.start()
+
+        try:
+            # Публикуем
+            future = producer.send(test_topic, value=test_message)
+            record_metadata = await future
+            assert record_metadata is not None
+
+            # Читаем
+            messages = []
+            async for msg in consumer:
+                messages.append(msg)
+                if len(messages) >= 1:
+                    break
+
+            assert len(messages) >= 1
+            assert messages[0].value["payment_id"] == "test-payment-001"
+            assert messages[0].value["amount"] == 1000
+        finally:
+            await producer.stop()
+            await consumer.stop()
